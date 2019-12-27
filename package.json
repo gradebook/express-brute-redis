@@ -17,13 +17,13 @@
     "url": "git@github.com:gradebook/express-brute-redis.git"
   },
   "devDependencies": {
-    "jasmine-node": "~1.11.0",
-    "proxyquire": "~0.5.0",
-    "async": "~0.2.9"
+    "async": "~3.1.0",
+    "express-brute": "^1.0.1",
+    "jasmine-node": "~3.0.0",
+    "proxyquire": "~2.1.3",
+    "underscore": "~1.9.1"
   },
-  "dependencies": {
-    "underscore": "~1.5.1",
-    "redis": "~0.10.0",
-    "express-brute": "~0.4.2"
+  "peerDependencies": {
+    "express-brute": "^1.0.1"
   }
 }
