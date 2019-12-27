@@ -1,62 +1,99 @@
-var AbstractClientStore = require('express-brute/lib/AbstractClientStore'),
-    Redis = require('redis'),
-    _ = require('underscore');
+// @ts-check
+var AbstractClientStore = require('express-brute/lib/AbstractClientStore');
 
-var RedisStore = module.exports = function (options) {
-	AbstractClientStore.apply(this, arguments);
-	this.options = _.extend({}, RedisStore.defaults, options);
-	this.redisOptions = _(this.options).clone();
-	delete this.redisOptions.prefix;
-	delete this.redisOptions.client;
-	delete this.redisOptions.port;
-	delete this.redisOptions.host;
-
-	if (this.options.client) {
-		this.client = this.options.client;
-	} else {
-		this.client = RedisStore.Redis.createClient(
-			this.options.port,
-			this.options.host,
-			this.options.redisOptions
-		);
-	}
+const DEFAULTS = {
+	prefix: ''
 };
-RedisStore.prototype = Object.create(AbstractClientStore.prototype);
-RedisStore.prototype.set = function (key, value, lifetime, callback) {
-	lifetime = parseInt(lifetime, 10) || 0;
-	var multi    = this.client.multi(),
-	    redisKey = this.options.prefix+key;
 
-	multi.set(redisKey, JSON.stringify(value));
-	if (lifetime > 0) {
-		multi.expire(redisKey, lifetime);
+const noop = (_, ___) => null;
+
+/**
+ * @typedef RedisClientLike
+ * @property {any} multi
+ * @property {any} incr
+ * @property {any} del
+ * @property {any} get
+ */
+
+/**
+ * @typedef BruteRedisOptions
+ * @property {string} prefix
+ * @property {RedisClientLike} client
+ */
+
+// @ts-ignore
+module.exports = class RedisStore extends AbstractClientStore {
+	static get DEFAULTS() {
+		return DEFAULTS;
 	}
-	multi.exec(function (err, data) {
-		typeof callback == 'function' && callback.call(this, null);
-	});
-};
-RedisStore.prototype.get = function (key, callback) {
-	this.client.get(this.options.prefix+key, function (err, data) {
-		if (err) {
-			typeof callback == 'function' && callback(err, null);
-		} else {
-			if (data) {
-				data = JSON.parse(data);
-				data.lastRequest = new Date(data.lastRequest);
-				data.firstRequest = new Date(data.firstRequest);
-			}
-			typeof callback == 'function' && callback(err, data);
+
+	/**
+	 * @param {BruteRedisOptions} options
+	 */
+	constructor(options) {
+		super();
+
+		if (!options.client) {
+			throw new Error('Redis Client must be passed provided');
 		}
-	});
-};
-RedisStore.prototype.reset = function (key, callback) {
-	this.client.del(this.options.prefix+key, function (err, data) {
-		typeof callback == 'function' && callback.apply(this, arguments);
-	});
-};
-RedisStore.Redis = Redis;
-RedisStore.defaults = {
-	prefix: '',
-	port: 6379,
-	host: '127.0.0.1'
+
+		this._options = Object.assign({}, RedisStore.DEFAULTS, options);
+		this._client = options.client;
+	}
+
+	/**
+	 * @param {string} key
+	 * @param {number} value
+	 * @param {string|number} lifetime
+	 */
+	async set(key, value, lifetime, callback = noop) {
+		// @ts-ignore
+		const expiresIn = parseInt(lifetime, 10) || 0;
+		const multi = this._client.multi();
+		const redisKey = `${this._options.prefix}${key}`;
+
+		multi.set(redisKey, JSON.stringify(value));
+		if (expiresIn > 0) {
+			multi.expire(redisKey, expiresIn);
+		}
+
+		try {
+			await multi.exec();
+			callback(null);
+		} catch(error) {
+			callback(error);
+		}
+	}
+
+	/**
+	 * @param {string} key
+	 */
+	async get(key, callback = noop) {
+		try {
+			let response = await this._client.get(`${this._options.prefix}${key}`);
+			if (!response) {
+				return callback(null, response);
+			}
+
+			response = JSON.parse(response);
+			response.lastRequest = new Date(response.lastRequest);
+			response.firstRequest = new Date(response.firstRequest);
+
+			callback(null, response);
+		} catch (error) {
+			callback(error);
+		}
+	}
+
+	/**
+	 * @param {string} key
+	 */
+	async reset(key, callback = noop) {
+		try {
+			const result = await this._client.del(`${this._options.prefix}${key}`);
+			callback(result)
+		} catch (error) {
+			callback(error);
+		}
+	};
 };

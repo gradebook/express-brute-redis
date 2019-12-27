@@ -1,12 +1,11 @@
-var RedisMock = require('../mock/RedisMock'),
-    proxyquire = require('proxyquire').noCallThru();
-var RedisStore = proxyquire('../index', {'redis': RedisMock});
+var RedisMock = require('../mock/RedisMock');
+var RedisStore = require('../index');
 
 describe("Express brute redis store", function () {
-	var instance, callback, store, count=0;
+	var instance, callback, count=0;
 	beforeEach(function () {
 		count++;
-		instance = new RedisStore({prefix: 'test'+count});
+		instance = new RedisStore({prefix: 'test'+count, client: new RedisMock()});
 		callback = jasmine.createSpy();
 	});
 
@@ -22,7 +21,7 @@ describe("Express brute redis store", function () {
 		});
 
 		waitsFor(function () { return callback.calls.length == 1; });
-		
+
 		runs(function () {
 			expect(callback).toHaveBeenCalledWith(null);
 
@@ -44,7 +43,7 @@ describe("Express brute redis store", function () {
 		});
 
 		waitsFor(function () { return callback.calls.length == 1; });
-		
+
 		runs(function () {
 			expect(callback).toHaveBeenCalledWith(null);
 
@@ -110,7 +109,7 @@ describe("Express brute redis store", function () {
 		});
 
 		waitsFor(function () { return callback.calls.length == 1; });
-		
+
 		runs(function () {
 			expect(callback).toHaveBeenCalledWith(null);
 
@@ -150,7 +149,7 @@ describe("Express brute redis store", function () {
 		});
 
 		waitsFor(function () { return callback.calls.length == 1; });
-		
+
 		runs(function () {
 			expect(callback).toHaveBeenCalledWith(null);
 		});
