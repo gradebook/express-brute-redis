@@ -3,15 +3,7 @@ const queue = require('async/queue');
 
 const RedisClientMock = function () {
 	this.data = {};
-	_.bindAll(this, 'set', 'get', 'expire', 'del', 'multi');
-};
-RedisClientMock.prototype.set = async function (key, value) {
-	if (!this.data[key]) {
-		this.data[key] = {};
-	}
-	this.data[key].value = value;
-
-	return null;
+	_.bindAll(this, '__ensureExists', 'hgetall', 'hincrby', 'hmset', 'expire', 'del', 'multi');
 };
 RedisClientMock.prototype.expire =  async function (key, lifetime) {
 	if (this.data[key] && this.data[key].timeout) {
@@ -22,8 +14,34 @@ RedisClientMock.prototype.expire =  async function (key, lifetime) {
 	}, this), 1000*lifetime);
 	return null
 };
-RedisClientMock.prototype.get = async function (key) {
-	return this.data[key] && this.data[key].value;
+RedisClientMock.prototype.__ensureExists = function(key) {
+	if (!this.data[key]) {
+		this.data[key] = {
+			value: {}
+		};
+	}
+
+	return null;
+};
+RedisClientMock.prototype.hgetall = async function (key) {
+	return this.data[key] && Object.assign({}, this.data[key].value);
+};
+RedisClientMock.prototype.hincrby = async function (map, key, amount) {
+	this.__ensureExists(map);
+	const initial = this.data[map].value[key] || 0;
+	const final = initial + amount;
+	this.data[map].value[key] = final;
+	return final;
+};
+RedisClientMock.prototype.hmset = async function (map, kvs) {
+	this.__ensureExists(map);
+	const t = this.data[map].value;
+
+	for (const [key, value] of kvs) {
+		t[key] = value;
+	}
+
+	return Object.assign({}, t);
 };
 RedisClientMock.prototype.del = async function (key) {
 	if (this.data[key] && this.data[key].timeout) {
@@ -37,7 +55,7 @@ RedisClientMock.prototype.multi = function () {
 };
 
 const RedisMultiMock = function (client) {
-	_.bindAll(this, 'set', 'get', 'expire', 'del', 'exec', '_handlePromise');
+	_.bindAll(this, 'get', 'hincrby', 'hmset', 'del', 'expire', 'exec', '_handlePromise');
 	this.client = client;
 	this.responses = [];
 	this.err = false;
@@ -51,11 +69,14 @@ const RedisMultiMock = function (client) {
 };
 
 RedisMultiMock.prototype = {
-	set(key, value) {
-		this.queue.push(cb => this._handlePromise(this.client.set.call(this.client, key, value), cb));
-	},
 	get(key) {
 		this.queue.push(cb => this._handlePromise(this.client.get.call(this.client, key), cb));
+	},
+	hincrby(map, key, num) {
+		this.queue.push(cb => this._handlePromise(this.client.hincrby.call(this.client, map, key, num), cb));
+	},
+	hmset(key, entries) {
+		this.queue.push(cb => this._handlePromise(this.client.hmset.call(this.client, key, entries), cb));
 	},
 	del(key) {
 		this.queue.push(cb => this._handlePromise(this.client.del.call(this.client, key), cb));

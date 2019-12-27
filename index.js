@@ -9,10 +9,16 @@ const noop = (_, ___) => null;
 
 /**
  * @typedef RedisClientLike
- * @property {any} multi
- * @property {any} incr
- * @property {any} del
- * @property {any} get
+ * @property {() => RedisClientMulti} multi
+ * @property {function} del
+ * @property {function} hgetall
+ */
+/**
+ * @typedef RedisClientMulti
+ * @property {function} hincrby
+ * @property {function} hmset
+ * @property {function} expire
+ * @property {function} exec
  */
 
 /**
@@ -43,16 +49,21 @@ module.exports = class RedisStore extends AbstractClientStore {
 
 	/**
 	 * @param {string} key
-	 * @param {number} value
+	 * @param {object} _value
 	 * @param {string|number} lifetime
 	 */
-	async set(key, value, lifetime, callback = noop) {
+	async set(key, _value, lifetime, callback = noop) {
+		const value = Object.assign({}, _value);
 		// @ts-ignore
 		const expiresIn = parseInt(lifetime, 10) || 0;
 		const multi = this._client.multi();
 		const redisKey = `${this._options.prefix}${key}`;
 
-		multi.set(redisKey, JSON.stringify(value));
+		// @NOTE: this deviates HARD from express-brute core. This is intentional in order to have more atomic increments
+		multi.hincrby(redisKey, 'count', 1);
+		delete value.count;
+		multi.hmset(redisKey, value);
+
 		if (expiresIn > 0) {
 			multi.expire(redisKey, expiresIn);
 		}
@@ -70,12 +81,11 @@ module.exports = class RedisStore extends AbstractClientStore {
 	 */
 	async get(key, callback = noop) {
 		try {
-			let response = await this._client.get(`${this._options.prefix}${key}`);
-			if (!response) {
-				return callback(null, response);
+			let response = await this._client.hgetall(`${this._options.prefix}${key}`);
+			if (Object.keys(response).length === 0) {
+				return callback(null, null);
 			}
 
-			response = JSON.parse(response);
 			response.lastRequest = new Date(response.lastRequest);
 			response.firstRequest = new Date(response.firstRequest);
 
