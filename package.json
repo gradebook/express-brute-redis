@@ -1,5 +1,5 @@
 {
-  "name": "express-brute-redis",
+  "name": "@gradebook/express-brute-redis",
   "version": "0.0.1",
   "description": "A Redis store for express-brute",
   "keywords": [
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:AdamPflug/express-brute-redis.git"
+    "url": "git@github.com:gradebook/express-brute-redis.git"
   },
   "devDependencies": {
     "jasmine-node": "~1.11.0",
